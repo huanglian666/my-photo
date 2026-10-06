@@ -1,34 +1,37 @@
-name: 构建并部署到 GitHub Pages
+name: 构建并推送到 gh-pages 分支
 
 on:
   push:
     branches: [main]
   workflow_dispatch:          # 也支持在 Actions 页面手动触发
 
-# GITHUB_TOKEN 的权限：部署 Pages 需要这三项
+# 要把构建产物推到 gh-pages 分支，需要写内容权限
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
-# 同一时间只跑一个部署；新的推送取消排队中的旧任务
+# 同一时间只跑一个；新的推送取消排队中的旧任务
 concurrency:
-  group: pages
+  group: gh-pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-deploy:
     runs-on: ubuntu-latest
     env:
       # 和本地保持一致。主题要求 Hugo extended ≥ 0.155
       # （需要 js.Build 打包 ES 模块，以及 Image.Meta 读 EXIF）
       HUGO_VERSION: 0.167.0
+
+      # GitHub Pages 的站点地址。项目页是 https://<用户名>.github.io/<仓库名>/
+      # 以后换自定义域名，只改这一行即可。
+      SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+
     steps:
-      # 必须在 checkout 之前：.gitmodules 里主题用的是 SSH 地址
-      # （git@github.com:...），而 Actions 里没有 SSH key，
-      # 直接拉子模块会认证失败。这条让 git 自动改写成 HTTPS。
-      # 仓库是公开的，HTTPS 匿名可读。
-      - name: 让 git 把 SSH 子模块地址改写成 HTTPS
+      # 必须在 checkout 之前：.gitmodules 里的主题地址现在虽然是 HTTPS，
+      # 但万一以后有人改回 SSH（git@github.com:...），Actions 里没有 SSH key
+      # 会直接认证失败。这条让 git 自动把 SSH 改写成 HTTPS 兜底。
+      # 主题仓库是公开的，HTTPS 匿名可读。
+      - name: 兜底：让 git 把 SSH 地址改写成 HTTPS
         run: git config --global url."https://github.com/".insteadOf "git@github.com:"
 
       - name: 检出代码（含子模块）
@@ -43,27 +46,16 @@ jobs:
           hugo-version: ${{ env.HUGO_VERSION }}
           extended: true
 
-      - name: 配置 Pages
-        id: pages
-        uses: actions/configure-pages@v5
-
-      # --baseURL 用 Pages 实际地址覆盖 hugo.toml 里的值，
-      # 这样换成自定义域名时不用改仓库
       - name: 构建
-        run: hugo --minify --baseURL "${{ steps.pages.outputs.base_url }}/"
+        run: hugo --minify --baseURL "${{ env.SITE_URL }}"
 
-      - name: 上传产物
-        uses: actions/upload-pages-artifact@v3
+      # 把 public/ 的内容推到 gh-pages 分支（会覆盖该分支旧内容）。
+      # 顺便写入 .nojekyll，避免 GitHub 用 Jekyll 处理静态文件。
+      - name: 推送到 gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: ./public
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: 部署
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          publish_branch: gh-pages
+          # 产物没变化时不再产生空提交
+          allow_empty_commit: false
