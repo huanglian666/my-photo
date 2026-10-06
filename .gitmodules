@@ -1,0 +1,3 @@
+[submodule "themes/photo-gallery"]
+	path = themes/photo-gallery
+	url = git@github.com:huanglian666/photo-gallery.git

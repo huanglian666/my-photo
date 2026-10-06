@@ -1,0 +1,9 @@
+# 照片已经整理进 content/albums/，这个中转目录不用进仓库
+photos/
+
+# Hugo 构建产物
+public/
+resources/
+.hugo_build.lock
+
+.DS_Store
