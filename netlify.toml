@@ -1,0 +1,35 @@
+# Netlify 部署配置
+#
+# 这个文件和 .github/workflows/deploy.yml 是两套独立的 CI，
+# 都会在 push 到 main 时构建同一个站点，互不影响：
+#   - GitHub Actions → GitHub Pages
+#   - Netlify        → Netlify 自己的域名
+
+[build]
+  # Netlify 检出代码时会自动执行 git submodule update --init --recursive，
+  # 主题 themes/photo-gallery 会被一起拉下来（.gitmodules 已改成 HTTPS，
+  # 公开仓库匿名可读，CI 里没有 SSH key 也能拉）。
+  command = "hugo --minify --baseURL \"$URL\""
+  publish = "public"
+
+[build.environment]
+  # 必须和本地、和 GitHub Actions 保持一致。
+  # 主题需要 Hugo extended ≥ 0.155（js.Build 打包 ES 模块 + Image.Meta 读 EXIF）。
+  # Netlify 在指定 HUGO_VERSION 时会安装 extended 版本。
+  HUGO_VERSION = "0.167.0"
+  # Hugo 支持 HUGO_ 前缀的环境变量覆盖根级配置项，
+  # 这两条等价于 hugo.toml 里的 enableGitInfo / minify。
+  HUGO_ENABLEGITINFO = "true"
+  HUGO_ENVIRONMENT = "production"
+
+# 构建产物带内容哈希，可以长期强缓存
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
